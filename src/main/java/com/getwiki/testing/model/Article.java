@@ -15,6 +15,8 @@ public class Article {
     @Setter
     private List<String> keywords;
 
+    private Map<String, List<String>> sections;
+
     public Article(String title) {
         this.title = title;
     }

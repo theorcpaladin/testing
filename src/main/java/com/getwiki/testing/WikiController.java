@@ -31,8 +31,11 @@ public class WikiController {
     
 	private static final String WIKI_PAGE_URL = "https://en.wikipedia.org/wiki/Heidenheim_an_der_Brenz";
 	private static final String TITLE_EXPRESSION = "//h1/text()";
-	private static final String HREF_EXPRESSION = "//p/a[contains(@href, '/wiki/')]";
-	private static final String INFOBOX_EXPRESSION = "//table[contains(@class, 'infobox')]";
+	// private static final String INFOBOX_EXPRESSION = "//table[contains(@class, 'infobox')]";
+	// private static final String SUBTITLE_EXPRESSION = "//h2/span[@class='mw-headline']";
+	private static final String PHREF_EXPRESSION = "//p/a[contains(@href, '/wiki/')]";
+	// private static final String LHREF_EXPRESSION = "//div[@class='mw-parser-output']/*/li/a[contains(@href, '/wiki/')] | //div[@class='mw-parser-output']/div/*/li/a[contains(@href, '/wiki/')]";
+	// private static String SECTION_HREF_EXPRESSION = "//h2/p/a/following::href[count(preceding::h2) = {}]";
 	private Article article;
 
 	private Gson gson = new Gson();
@@ -75,13 +78,11 @@ public class WikiController {
 		List<String> wikiLinks = new ArrayList<>();
 
 		article = new Article(xPath.compile(TITLE_EXPRESSION).evaluate(xmlDocument));
-		NodeList nodes = (NodeList) xPath.compile(HREF_EXPRESSION).evaluate(xmlDocument, XPathConstants.NODESET);
-		for (int i = 0; i < nodes.getLength(); i++) {
-			wikiLinks.add(nodes.item(i).getTextContent());
+		NodeList linkNodes = (NodeList) xPath.compile(PHREF_EXPRESSION).evaluate(xmlDocument, XPathConstants.NODESET);
+		for (int i = 0; i < linkNodes.getLength(); i++) {
+			wikiLinks.add(linkNodes.item(i).getTextContent());
 		}
 		article.setKeywords(wikiLinks);
-		article.getKeywords().stream().forEach(hl -> System.out.println(hl));
-
 	}
 
 }
