@@ -1,16 +1,19 @@
 package com.getwiki.testing;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
 import java.util.List;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.xpath.XPath;
 import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 
 import com.getwiki.testing.model.Article;
+import com.google.gson.Gson;
 
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
@@ -20,17 +23,20 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.w3c.dom.Document;
 import org.w3c.dom.NodeList;
-import org.xml.sax.InputSource;
 
 @RestController
 public class WikiController {
     
+	private static final String WIKI_PAGE_URL = "https://en.wikipedia.org/wiki/Heidenheim_an_der_Brenz";
 	private static final String TITLE_EXPRESSION = "//h1/text()";
-	private static final String H2_EXPRESSION = "/html/body/div[@id='content']/div[@id='bodyContent']/div[@id='catlinks']/div[@id='mw-content-text']/div[@class='mw-parser-output']/h2[1]/span[1]/text()";
+	private static final String HREF_EXPRESSION = "//p/a[contains(@href, '/wiki/')]";
+	private static final String INFOBOX_EXPRESSION = "//table[contains(@class, 'infobox')]";
 	private Article article;
 
-	private static final String WIKI_PAGE_URL = "https://en.wikipedia.org/wiki/Heidenheim_an_der_Brenz";
+	private Gson gson = new Gson();
+
     @GetMapping("/test")
 	public String index() {
 
@@ -44,33 +50,38 @@ public class WikiController {
 					EntityUtils.consume(entity);
 
 					InputStream inputStream = new ByteArrayInputStream(xmlBytes);
-					InputSource inputSource = new InputSource(inputStream);
-					inputStream.close();
+					// InputSource inputSource = new InputSource(inputStream);
 
-					mapDataToArticle(inputSource);
-					return article.getTitle();
+					DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
+					DocumentBuilder builder = builderFactory.newDocumentBuilder();
+					Document xmlDocument = builder.parse(inputStream);
+					
+					mapDataToArticle(xmlDocument);
+					inputStream.close();
+					return gson.toJson(article);
 				} else {
 					return "A non-200 http response was returned: " + httpCode;
 				}
 
 			}
-		} catch (IOException ioe) {
-			ioe.printStackTrace();
-			return "There was an IOException: " + ioe.getMessage();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return "There was an Exception: " + e.getMessage();
 		}
 	}
 
-	private void mapDataToArticle(InputSource inputSource) {
+	private void mapDataToArticle(Document xmlDocument) throws XPathExpressionException {
 		XPath xPath = XPathFactory.newInstance().newXPath();
-		try {
-			article = new Article(xPath.compile(TITLE_EXPRESSION).evaluate(inputSource));
-			// String temp = xPath.compile(H2_EXPRESSION).evaluate(inputSource);
-			// System.out.println(temp);
-			// NodeList nodes = (NodeList) xPath.compile(H2_EXPRESSION).evaluate(inputSource, XPathConstants.NODESET);
-			// System.out.println(nodes.getLength());
-		} catch (XPathExpressionException xpee) {
-			xpee.printStackTrace();
+		List<String> wikiLinks = new ArrayList<>();
+
+		article = new Article(xPath.compile(TITLE_EXPRESSION).evaluate(xmlDocument));
+		NodeList nodes = (NodeList) xPath.compile(HREF_EXPRESSION).evaluate(xmlDocument, XPathConstants.NODESET);
+		for (int i = 0; i < nodes.getLength(); i++) {
+			wikiLinks.add(nodes.item(i).getTextContent());
 		}
+		article.setKeywords(wikiLinks);
+		article.getKeywords().stream().forEach(hl -> System.out.println(hl));
+
 	}
 
 }
