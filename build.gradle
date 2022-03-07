@@ -17,6 +17,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 
+	implementation 'com.amazonaws:aws-lambda-java-core:1.2.1'
+    implementation 'com.amazonaws:aws-lambda-java-events:3.11.0'
+
 	implementation 'org.apache.httpcomponents.core5:httpcore5-h2:5.1.1'
     implementation 'org.apache.httpcomponents.client5:httpclient5:5.1.1'
 
@@ -27,4 +30,12 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+task buildZip(type: Zip) {
+    from compileJava
+    from processResources
+    into('lib') {
+        from configurations.runtimeClasspath
+    }
 }
