@@ -1,17 +1,14 @@
 package com.getwiki.testing;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathConstants;
-import javax.xml.xpath.XPathExpressionException;
-import javax.xml.xpath.XPathFactory;
+import javax.xml.parsers.ParserConfigurationException;
 
+import com.getwiki.testing.mapper.WikiDataToArticleMapper;
 import com.getwiki.testing.model.Article;
 import com.google.gson.Gson;
 
@@ -24,65 +21,54 @@ import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.w3c.dom.Document;
-import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 @RestController
 public class WikiController {
-    
+
 	private static final String WIKI_PAGE_URL = "https://en.wikipedia.org/wiki/Heidenheim_an_der_Brenz";
-	private static final String TITLE_EXPRESSION = "//h1/text()";
-	// private static final String INFOBOX_EXPRESSION = "//table[contains(@class, 'infobox')]";
-	// private static final String SUBTITLE_EXPRESSION = "//h2/span[@class='mw-headline']";
-	private static final String PHREF_EXPRESSION = "//p/a[contains(@href, '/wiki/')]";
-	// private static final String LHREF_EXPRESSION = "//div[@class='mw-parser-output']/*/li/a[contains(@href, '/wiki/')] | //div[@class='mw-parser-output']/div/*/li/a[contains(@href, '/wiki/')]";
-	// private static String SECTION_HREF_EXPRESSION = "//h2/p/a/following::href[count(preceding::h2) = {}]";
-	private Article article;
+	protected static final String EXCEPTION_RESPONSE = "There was an Exception: ";
+	protected static final String ERROR_RESPONSE = "A non-200 http response was returned: ";
 
 	private Gson gson = new Gson();
+	private WikiDataToArticleMapper mapper;
+	private CloseableHttpClient httpClient;
 
     @GetMapping("/test")
-	public String index() {
-
-		try(CloseableHttpClient httpclient = HttpClients.createDefault()) {
+	public String index() throws Exception {
+		try {
+			httpClient = HttpClients.createDefault();
 			HttpGet httpGet = new HttpGet(WIKI_PAGE_URL);
-			try(CloseableHttpResponse response = httpclient.execute(httpGet)) {
+			try(CloseableHttpResponse response = httpClient.execute(httpGet)) {
 				HttpEntity entity = response.getEntity();
 				int httpCode = response.getCode();
 				if(httpCode == 200) {
-					byte[] xmlBytes = EntityUtils.toByteArray(entity);
-					EntityUtils.consume(entity);
-
-					InputStream inputStream = new ByteArrayInputStream(xmlBytes);
-					// InputSource inputSource = new InputSource(inputStream);
-
-					DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
-					DocumentBuilder builder = builderFactory.newDocumentBuilder();
-					Document xmlDocument = builder.parse(inputStream);
-					
-					mapDataToArticle(xmlDocument);
-					inputStream.close();
+					Document xmlDocument = buildDocumentFromResponseEntity(entity);
+					mapper = new WikiDataToArticleMapper();
+					Article article = mapper.mapDataToArticle(xmlDocument);
 					return gson.toJson(article);
 				} else {
-					return "A non-200 http response was returned: " + httpCode;
+					return ERROR_RESPONSE + httpCode;
 				}
-
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
-			return "There was an Exception: " + e.getMessage();
+			return EXCEPTION_RESPONSE + e.getMessage();
+		} finally {
+			httpClient.close();
 		}
 	}
 
-	private void mapDataToArticle(Document xmlDocument) throws XPathExpressionException {
-		XPath xPath = XPathFactory.newInstance().newXPath();
-		List<String> wikiLinks = new ArrayList<>();
+	private Document buildDocumentFromResponseEntity(HttpEntity entity) throws IOException, ParserConfigurationException, SAXException {
+		byte[] xmlBytes = EntityUtils.toByteArray(entity);
+		EntityUtils.consume(entity);
+		InputStream inputStream = new ByteArrayInputStream(xmlBytes);
 
-		article = new Article(xPath.compile(TITLE_EXPRESSION).evaluate(xmlDocument));
-		NodeList linkNodes = (NodeList) xPath.compile(PHREF_EXPRESSION).evaluate(xmlDocument, XPathConstants.NODESET);
-		for (int i = 0; i < linkNodes.getLength(); i++) {
-			wikiLinks.add(linkNodes.item(i).getTextContent());
-		}
-		article.setKeywords(wikiLinks);
+		DocumentBuilderFactory builderFactory = DocumentBuilderFactory.newInstance();
+		DocumentBuilder builder = builderFactory.newDocumentBuilder();
+		Document xmlDocument = builder.parse(inputStream);
+		inputStream.close();
+		return xmlDocument;
 	}
 
 }
